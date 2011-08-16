@@ -18,22 +18,22 @@ views.
 
     import dabble
     dabble.configure(
-        CookieIdentityProvider('abtest_id'),
+        CookieIdentityProvider('dabble_id'),
         FSResultStorage('/path/to/results.data')
     )
 
     class Signup(page):
         path = '/signup'
 
-        signup_button = ABTest('signup_button', ['Red Button', 'Green Button'])
-        button_color = ABParameter('signup_button', ['#ff0000', '#00ff00'])
+        signup_button = ABTest('signup button', ['Red Button', 'Green Button'])
+        button_color = ABParameter('signup button', ['#ff0000', '#00ff00'])
 
         def GET(self):
-            self.signup_button.record('show button')
+            self.signup_button.record('show')
             return render('index.html', button_color=self.button_color)
 
         def POST(self):
-            self.signup_button.record('signed up')
+            self.signup_button.record('signup')
             return redirect('/account')
 
 Behind the scenes, dabble has used a cookie for each user on your site to
