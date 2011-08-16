@@ -22,21 +22,19 @@ views.
         FSResultStorage('/path/to/results.data')
     )
 
-    class Homepage(page):
-        path = '/'
+    class Signup(page):
+        path = '/signup'
 
         signup_button = ABTest('signup_button', ['Red Button', 'Green Button'])
         button_color = ABParameter('signup_button', ['#ff0000', '#00ff00'])
 
         def GET(self):
+            self.signup_button.record('show button')
             return render('index.html', button_color=self.button_color)
 
-    class Signup(page):
-        path = '/signup'
-
         def POST(self):
-            # add a new user
-            Homepage.signup_button.record('signed up')
+            self.signup_button.record('signed up')
+            return redirect('/account')
 
 Behind the scenes, dabble has used a cookie for each user on your site to
 assigne them each an *identity*, so that each user always ever sees the same
