@@ -58,9 +58,7 @@ straightforward to write your own.
 identify individuals, rather than browsing sessions (particularly if cookies
 are set to expire when the user closes his/her browser). If you are testing
 a feature that requires users to be logged in, then their username is a good
-choice for identity. Dabble provides a `CookieIdentityProvider`, as seen in
-the above example, but does not provide a way to set the cookie, as that
-will vary from framework to framework.
+choice for identity.
 
 `ResultsStorage` stores configuration and results of A/B tests, and provides
 some facilities for generating reports based on the stored results. Dabble
