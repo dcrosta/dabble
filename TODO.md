@@ -4,4 +4,4 @@
  * way to reformat report output into something easier to use in a table
  * way to run/print reports at command line?
 * add funnel report
-
+* add decorator-injected parameters?
