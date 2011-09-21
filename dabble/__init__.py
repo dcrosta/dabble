@@ -258,7 +258,7 @@ class ABTest(AB):
         )
 
     def is_completed(self):
-        self._storage.record(
+        self._storage.is_completed(
             self.identity,
             self.test_name,
             self.alternative
