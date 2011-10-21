@@ -1,3 +1,6 @@
+from distribute_setup import use_setuptools
+use_setuptools()
+
 from setuptools import setup, find_packages
 
 from dabble import __version__
@@ -16,8 +19,7 @@ setup(
     author='Daniel Crosta',
     author_email='dcrosta@late.am',
     url='https://github.com/dcrosta/dabble',
-    keywords='python web abtest ab test a/b test',
+    keywords='python web abtest split ab a/b test',
     packages=find_packages(),
 )
-
 
