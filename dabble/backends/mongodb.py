@@ -26,13 +26,14 @@
 __all__ = ('MongoResultStorage', )
 
 from dabble import ResultStorage
+from dabble.util import *
 
 from datetime import datetime
 from random import randrange
-from pymongo.database import Database
-from pymongo import ASCENDING, DESCENDING
-from pymongo.errors import DuplicateKeyError
 from bson.son import SON
+from pymongo import ASCENDING, DESCENDING
+from pymongo.database import Database
+from pymongo.errors import DuplicateKeyError
 
 class MongoResultStorage(ResultStorage):
 
@@ -41,8 +42,7 @@ class MongoResultStorage(ResultStorage):
         Setup requires at least a :class:`pymongo.database.Database` instance,
         and optionally accepts a `namespace` parameter, which is used to
         generate collection names used for storage. Three collections will be
-        used, named "<namespace>.tests", "<namespace>.results", and
-        "<namespace>.alts".
+        used, named "<namespace>.tests" and "<namespace>.results".
 
         :Parameters:
           - `database`: a :class:`pymongo.database.Database` instance
@@ -56,142 +56,80 @@ class MongoResultStorage(ResultStorage):
 
         self.tests = database['%s.tests' % namespace]
         self.results = database['%s.results' % namespace]
-        self.alts = database['%s.alts' % namespace]
 
-        self.tests.ensure_index([
-            ('t', ASCENDING),  # test name
-        ], unique=True)
+        self.results.ensure_index('i')
+        self.results.ensure_index('t')
 
-        self.results.ensure_index([
-            ('i', ASCENDING),
-            ('d', ASCENDING),
-        ])
-        self.results.ensure_index([
-            ('i', ASCENDING),  # identity
-            ('t', ASCENDING),  # test name
-            ('n', ASCENDING),  # alternative
-            ('c', DESCENDING), # completed
-        ])
-
-        self.alts.ensure_index([
-            ('i', ASCENDING),  # identity
-            ('t', ASCENDING),  # test name
-            ('n', ASCENDING),  # alternative
-        ], unique=True)
-
-    def save_test(self, test_name, alternatives):
-        test = self.tests.find_one({'t': test_name})
+    def save_test(self, test_name, alternatives, steps):
+        test = self.tests.find_one({'_id': test_name})
 
         if test and test['a'] != alternatives:
             raise Exception('test "%s" already exists with different alternatives' % test_name)
 
         elif not test:
             self.tests.save({
-                't': test_name,
+                '_id': test_name,
                 'a': alternatives,
+                's': steps,
             }, safe=True)
 
-    def record(self, identity, test_name, alternative, action, completed=False):
-        self.results.save({
+    def record(self, identity, test_name, alternative, action):
+        self.results.update({
             'i': identity,
             't': test_name,
-            'n': alternative,
-            'a': action,
-            'c': completed,
-            'd': datetime.utcnow(),
-        }, safe=True)
+            'n': alternative},
+            {'$addToSet': {'s': action}},
+            upsert=True)
 
-    def is_completed(self, identity, test_name, alternative):
-        return self.results.find_one({
-            'i': identity,
-            't': test_name,
-            'n': alternative,
-            'c': True
-        }) is not None
+    def has_action(self, identity, test_name, alternative, action):
+        return self.results.find_one({'i': identity, 't': test_name, 'n': alternative, 's': action}) is not None
 
     def set_alternative(self, identity, test_name, alternative):
-        try:
-            self.alts.save({
-                'i': identity,
-                't': test_name,
-                'n': alternative
-            })
-        except DuplicateKeyError:
+        # XXX: possible race condition, but one will win, and
+        # for A/B testing that's probably OK.
+        result = self.results.find_one({'i': identity, 't': test_name})
+        if not result:
+            self.results.save({'i': identity, 't': test_name, 'n': alternative, 's': []})
+
+        elif result and result['n'] != alternative:
             raise Exception('different alternative already set for identity %s' % identity)
 
     def get_alternative(self, identity, test_name):
-        alt = self.alts.find_one({'i': identity, 't': test_name}) or {}
-        return alt.get('n')
+        result = self.results.find_one({'i': identity, 't': test_name}) or {}
+        return result.get('n')
 
-    def ab_report(self, test_name, a, b):
-        test = self.tests.find_one({'t': test_name})
+    def report(self, test_name):
+        test = self.tests.find_one({'_id': test_name})
         if test is None:
             raise Exception('unknown test "%s"' % test_name)
 
-        db = self.results.database
-        # TODO: better collection name?
-        intermediate_name = '%s.report.%s' % (self.namespace, randrange(1000, 9999))
-
-        pa = a.replace('"', r'\"')
-        pb = b.replace('"', r'\"')
-
-        map_func = """
-        function() {
-            emit({i: this.i, n: this.n}, {a: this.a === "%s", b: this.a === "%s", d: this.d});
-        }""" % (pa, pb)
-
-        reduce_func = """
-        function(key, values) {
-            function cmp_d(x, y) {
-                if (x.d < y.d) return -1;
-                if (y.d < x.d) return 1;
-                return 0;
-            }
-            values.sort(cmp_d);
-            var out = {a: false, b: false, d: values[values.length-1].d};
-            values.forEach(function(obj) {
-                out.a = out.a || obj.a;
-                out.b = (out.a && obj.b) || out.b;
-            });
-            return out;
-        }"""
-
-        finalize_func = """
-        function(key, value) {
-            return {a: value.a, b:value.b};
-        }"""
-
-        intermediate = self.results.map_reduce(
-            map=map_func,
-            reduce=reduce_func,
-            finalize=finalize_func,
-            out=intermediate_name,
-            query={'t': test_name},
-            sort=SON([('i', ASCENDING), ('d', ASCENDING)]),
-        )
-
-        results = intermediate.group(
-            key={'_id.n': 1, 'value': 1},
-            initial={'count': 0},
-            reduce="function(obj, prev) { prev.count++; }",
-            condition={}
-        )
-        intermediate.drop()
-
-        out = {
+        report = {
             'test_name': test_name,
-            'alternatives': test['a'],
-            'results': [
-                {'attempted': 0, 'completed': 0}
-                for alt in test['a']
-            ]
+            'results': []
         }
 
-        for result in results:
-            if result['value']['a']:
-                out['results'][int(result['_id.n'])]['attempted'] += result['count']
-                if result['value']['b']:
-                    out['results'][int(result['_id.n'])]['completed'] += result['count']
+        trials = sparsearray(int)
 
-        return out
+        for result in self.results.find({'t': test_name}):
+            if result['s'] != test['s'][:len(result['s'])]:
+                # invalid order of steps recorded
+                continue
+
+            for i in xrange(len(result['s'])):
+                trials[result['n']][i] += 1
+
+        for i, alternative in enumerate(test['a']):
+            funnel = []
+            alt = {'alternative': alternative, 'funnel': funnel}
+            report['results'].append(alt)
+            for s, stepspair in enumerate(pairwise(test['s'])):
+                att = trials[i][s]
+                con = trials[i][s + 1]
+                funnel.append({
+                    'stage': stepspair,
+                    'attempted': att,
+                    'converted': con,
+                })
+
+        return report
 

@@ -33,56 +33,10 @@ class RandRange(object):
         return self.last
 
 
-class ReportTest(unittest.TestCase):
-
-    def setUp(self):
-        conn = pymongo.Connection()
-        db = conn.test
-        for collection in db.collection_names():
-            if collection.startswith('dabble'):
-                db.drop_collection(collection)
-
-        self.storage = MongoResultStorage(db)
-        self.provider = MockIdentityProvider()
-        configure(self.provider, self.storage)
-
-        # also mock random.randrange with a callable
-        # object which will tell us what the "random"
-        # value was
-        self.randrange = RandRange()
-        dabble.random.randrange = self.randrange
-
-
-    # def setUp(self):
-    #     here = dirname(__file__)
-    #     storage_dir = join(here, 'storage')
-    #     if exists(storage_dir):
-    #         rmtree(storage_dir)
-    #     makedirs(storage_dir)
-
-    #     self.storage = FSResultStorage(storage_dir)
-    #     self.provider = MockIdentityProvider()
-    #     configure(self.provider, self.storage)
-
-    #     # also mock random.randrange with a callable
-    #     # object which will tell us what the "random"
-    #     # value was
-    #     self.randrange = RandRange()
-    #     dabble.random.randrange = self.randrange
-
-
-    def tearDown(self):
-        # pretend like the previous test never happened
-        dabble.AB._id_provider = None
-        dabble.AB._storage = None
-        dabble.AB._AB__n_per_test = {}
-
-        del self.storage
-        del self.provider
-
+def ReportTestFor(name, setUp_func, tearDown_func):
     def test_one(self):
         class T(object):
-            abtest = ABTest('foobar', ['foo'])
+            abtest = ABTest('foobar', ['foo'], ['show', 'fill'])
 
         t = T()
 
@@ -101,16 +55,32 @@ class ReportTest(unittest.TestCase):
         self.provider.identity = 4
         t.abtest.record('show')
 
-        report = self.storage.ab_report('foobar', 'show', 'fill')
+        report = self.storage.report('foobar')
 
-        self.assertEquals(report['test_name'], 'foobar')
-        self.assertEquals(report['alternatives'], ['foo'])
-        self.assertEquals(report['results'][0]['attempted'], 3)
-        self.assertEquals(report['results'][0]['completed'], 2)
+        expected = {
+            'test_name': 'foobar',
+            'results': [{
+                'alternative': 'foo',
+                'funnel': [{
+                    'stage': ('show', 'fill'),
+                    'attempted': 3,
+                    'converted': 2,
+                }],
+            }],
+        }
+
+        try:
+            self.assertEquals(report, expected)
+        except:
+            from pprint import pprint
+            pprint(report)
+            pprint(expected)
+            raise
+
 
     def test_two(self):
         class T(object):
-            abtest = ABTest('foobar', ['foo', 'bar'])
+            abtest = ABTest('foobar', ['foo', 'bar'], ['show', 'fill'])
 
         t = T()
 
@@ -133,15 +103,184 @@ class ReportTest(unittest.TestCase):
         self.provider.identity = 4
         t.abtest.record('show')
 
-        report = self.storage.ab_report('foobar', 'show', 'fill')
+        report = self.storage.report('foobar')
 
-        self.assertEquals(report['test_name'], 'foobar')
-        self.assertEquals(report['alternatives'], ['foo', 'bar'])
-        self.assertEquals(report['results'][0]['attempted'], 1)
-        self.assertEquals(report['results'][0]['completed'], 1)
-        self.assertEquals(report['results'][1]['attempted'], 2)
-        self.assertEquals(report['results'][1]['completed'], 1)
+        expected = {
+            'test_name': 'foobar',
+            'results': [
+                {
+                    'alternative': 'foo',
+                    'funnel': [{
+                        'stage': ('show', 'fill'),
+                        'attempted': 1,
+                        'converted': 1,
+                    }],
+                },
+                {
+                    'alternative': 'bar',
+                    'funnel': [{
+                        'stage': ('show', 'fill'),
+                        'attempted': 2,
+                        'converted': 1,
+                    }],
+                }
+            ],
+        }
 
+        self.assertEquals(report, expected)
+
+    def test_funnel(self):
+        class T(object):
+            abtest = ABTest('foobar', ['foo', 'bar'], ['a', 'b', 'c', 'd'])
+
+        t = T()
+
+        # foo
+        self.provider.identity = 1
+        t.abtest.record('a')
+        t.abtest.record('b')
+
+        # bar
+        self.provider.identity = 2
+        t.abtest.record('a')
+        t.abtest.record('b')
+        t.abtest.record('c')
+
+        # foo
+        self.provider.identity = 3
+        t.abtest.record('a')
+        t.abtest.record('b')
+        t.abtest.record('c')
+
+        # bar
+        self.provider.identity = 4
+        t.abtest.record('a')
+        t.abtest.record('b')
+        t.abtest.record('c')
+        t.abtest.record('d')
+
+        expected = {
+            'test_name': 'foobar',
+            'results': [
+                {
+                    'alternative': 'foo',
+                    'funnel': [
+                        {
+                            'stage': ('a', 'b'),
+                            'attempted': 2,
+                            'converted': 2,
+                        },
+                        {
+                            'stage': ('b', 'c'),
+                            'attempted': 2,
+                            'converted': 1,
+                        },
+                        {
+                            'stage': ('c', 'd'),
+                            'attempted': 1,
+                            'converted': 0,
+                        },
+                    ],
+                },
+                {
+                    'alternative': 'bar',
+                    'funnel': [
+                        {
+                            'stage': ('a', 'b'),
+                            'attempted': 2,
+                            'converted': 2,
+                        },
+                        {
+                            'stage': ('b', 'c'),
+                            'attempted': 2,
+                            'converted': 2,
+                        },
+                        {
+                            'stage': ('c', 'd'),
+                            'attempted': 2,
+                            'converted': 1,
+                        },
+                    ],
+                }
+            ],
+        }
+
+        report = self.storage.report('foobar')
+        self.assertEquals(report, expected)
+
+
+    funcs = {
+        'test_one': test_one,
+        'test_two': test_two,
+        'test_funnel': test_funnel,
+    }
+    if setUp_func:
+        funcs['setUp'] = setUp_func
+    if tearDown_func:
+        funcs['tearDown'] = tearDown_func
+
+    return type(name, (unittest.TestCase, ), funcs)
+
+def generic_setUp(self):
+    # also mock random.randrange with a callable
+    # object which will tell us what the "random"
+    # value was
+    self.randrange = RandRange()
+    dabble.random.randrange = self.randrange
+
+def mongo_setUp(self):
+    generic_setUp(self)
+
+    conn = pymongo.Connection()
+    db = conn.dabble_test
+    for collection in db.collection_names():
+        if collection.startswith('dabble'):
+            db.drop_collection(collection)
+
+    self.storage = MongoResultStorage(db)
+    self.provider = MockIdentityProvider()
+    configure(self.provider, self.storage)
+
+def fs_setUp(self):
+    generic_setUp(self)
+
+    here = dirname(__file__)
+    storage_dir = join(here, 'storage')
+    if exists(storage_dir):
+        rmtree(storage_dir)
+    makedirs(storage_dir)
+
+    self.storage = FSResultStorage(storage_dir)
+    self.provider = MockIdentityProvider()
+    configure(self.provider, self.storage)
+
+
+def generic_tearDown(self):
+    # pretend like the previous test never happened
+    dabble.AB._id_provider = None
+    dabble.AB._storage = None
+    dabble.AB._AB__n_per_test = {}
+
+    del self.storage
+    del self.provider
+
+def mongo_tearDown(self):
+    generic_tearDown(self)
+
+    conn = pymongo.Connection()
+    #conn.drop_database('dabble_test')
+
+def fs_tearDown(self):
+    generic_tearDown(self)
+
+    here = dirname(__file__)
+    storage_dir = join(here, 'storage')
+    if exists(storage_dir):
+        rmtree(storage_dir)
+
+
+MongoReportTest = ReportTestFor('MongoReportTest', mongo_setUp, mongo_tearDown)
+FSReportTest = ReportTestFor('FSReportTest', fs_setUp, fs_tearDown)
 
 if __name__ == '__main__':
     unittest.main()

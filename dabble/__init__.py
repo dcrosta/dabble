@@ -50,14 +50,14 @@ class ResultStorage(object):
     and retrieving A/B test results to a persistent medium, often
     a database or file on disk.
 
-    The :meth:`record_action`, :meth:`is_completed`, :meth:`set_alternative`,
+    The :meth:`record_action`, :meth:`has_action`, :meth:`set_alternative`,
     and :meth:`get_alternative` methods of this class will be called
     synchronously during usage of the framework (e.g. during web page loads),
     so care should be taken to ensure that they operate as efficiently as
     possible.
     """
 
-    def save_test(self, test_name, alternatives):
+    def save_test(self, test_name, alternatives, steps):
         """Save an ABTest.
 
         Unlike the :meth:`record` method, this method should not save
@@ -70,10 +70,12 @@ class ResultStorage(object):
             :meth:`AB.__init__`
           - `alternatives`: a list of string names of the alternatives
             used by the :class:`ABTest`
+          - `steps`: an ordered list of the steps the user will proceed
+            through during the test (used for funnel analysis)
         """
         raise Exception('Not implemented. Use a sub-class of ResultStorage')
 
-    def record(self, identity, test_name, alternative, action, completed=False):
+    def record(self, identity, test_name, alternative, action):
         """Save a user's action to the persistent medium.
 
         :Parameters:
@@ -84,15 +86,12 @@ class ResultStorage(object):
           - `alternative`: the postitive integer index of the alternative
             displayed to the user
           - `action`: the string name of the action the user took
-          - `completed`: the boolean flag indicating whether the user has
-            completed the task associated with this A/B test
         """
         raise Exception('Not implemented. Use a sub-class of ResultStorage')
 
-    def is_completed(self, identity, test_name, alternative):
-        """Return `True` if any user action for the given identity, test name,
-        and alternative index was :meth:`record`ed with the completed flag
-        set to `True`, and `False` otherwise.
+    def has_action(self, identity, test_name, alternative, action):
+        """Return `True` if the user with the given identity, has the given
+        action recorded for the given test name and alternative, else `False`.
 
         :Parameters:
           - `identity`: the hashed identity of the user, as returned
@@ -101,6 +100,7 @@ class ResultStorage(object):
             :meth:`AB.__init__`
           - `alternative`: the postitive integer index of the alternative
             displayed to the user
+          - `action`: the name of an action
         """
         raise Exception('Not implemented. Use a sub-class of ResultStorage')
 
@@ -130,7 +130,7 @@ class ResultStorage(object):
         """
         raise Exception('Not implemented. Use a sub-class of ResultStorage')
 
-    def ab_report(self, test_name, a, b):
+    def report(self, test_name, a, b):
         """Return report data for the alternatives of a given test
         where users have either action `a` only, or actions `a` and
         `b`. Other actions, and duplicate or repeated actions are
@@ -147,7 +147,7 @@ class ResultStorage(object):
                 alternatives: ["...", "...", ...],
                 results: [
                     {   attempted: N,
-                        completed: M,
+                        converted: M,
                     }, ...
                 ]
             }
@@ -162,10 +162,7 @@ class ResultStorage(object):
         attempt is defined as an identity with at least one recorded
         `a` action; a completion is defined as an identity with at
         least one recorded `a` action followed by (chronologically)
-        at least one recorded `b` action. Note that "completed" here
-        is distinct from the `completed` flag to :meth:`record`, which
-        is intended for use from within the running application, not
-        for reporting.
+        at least one recorded `b` action.
 
         Implementation of the report is delegated to the storage
         class since dabble cannot know the most efficient way to
@@ -236,7 +233,7 @@ class ABTest(AB):
     #
     #   class ShowAForm(app.page):
     #       path = '/page/with/form'
-    #       abtest = ABTest('my_test', ['Complete Form', 'Brief Form']
+    #       abtest = ABTest('my_test', ['Complete Form', 'Brief Form'], ['Form Shown', 'Form Filled'])
     #       formname = ABParameter('my_test', ['form_one', 'form_two'])
     #
     #       def GET(self):
@@ -244,24 +241,24 @@ class ABTest(AB):
     #               raise web.seeother('/page/after/form/completion')
     #           render('template.html', form=self.get_form(self.formname))
 
-    def __init__(self, test_name, alternatives):
+    def __init__(self, test_name, alternatives, steps):
         super(ABTest, self).__init__(test_name, alternatives)
-        self._storage.save_test(test_name, alternatives)
+        self._storage.save_test(test_name, alternatives, steps)
 
-    def record(self, action, completed=False):
+    def record(self, action):
         self._storage.record(
             self.identity,
             self.test_name,
             self.alternative,
             action,
-            completed
         )
 
-    def is_completed(self):
-        self._storage.is_completed(
+    def is_completed(self, action):
+        self._storage.has_action(
             self.identity,
             self.test_name,
-            self.alternative
+            self.alternative,
+            action
         )
 
 

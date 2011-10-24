@@ -26,6 +26,8 @@
 __all__ = ('FSResultStorage', )
 
 from dabble import ResultStorage
+from dabble.util import *
+
 from os.path import exists, join, abspath
 from os import SEEK_END
 from lockfile import FileLock
@@ -99,21 +101,20 @@ class FSResultStorage(ResultStorage):
         self.results_path = join(self.directory, 'results.dabble')
         self.alts_path = join(self.directory, 'alts.dabble')
 
-    def save_test(self, test_name, alternatives):
+    def save_test(self, test_name, alternatives, steps):
         existing = find_line(self.tests_path, t=test_name)
-        if existing and existing['a'] != alternatives:
+        if existing and (existing['a'] != alternatives or existing['s'] != steps):
             raise Exception(
                 'test "%s" already exists with different alternatives' % test_name)
 
-        append_line(self.tests_path, t=test_name, a=alternatives)
+        append_line(self.tests_path, t=test_name, a=alternatives, s=steps)
 
-    def record(self, identity, test_name, alternative, action, completed=False):
+    def record(self, identity, test_name, alternative, action):
         append_line(self.results_path,
-                    i=identity, t=test_name, n=alternative, a=action, c=completed)
+                    i=identity, t=test_name, n=alternative, s=action)
 
-    def is_completed(self, identity, test_name, alternative):
-        completed = find_line(self.results_path, i=identity, t=test_name, n=alternative, c=True)
-        return completed is not None
+    def has_action(self, identity, test_name, alternative, action):
+        return find_line(self.results_path, i=identity, t=test_name, n=alternative, a=action) is not None
 
     def set_alternative(self, identity, test_name, alternative):
         existing = find_line(self.alts_path, i=identity, t=test_name)
@@ -127,30 +128,38 @@ class FSResultStorage(ResultStorage):
         existing = find_line(self.alts_path, i=identity, t=test_name) or {}
         return existing.get('n')
 
-    def ab_report(self, test_name, a, b):
+    def report(self, test_name):
         test = find_line(self.tests_path, t=test_name)
         if test is None:
             raise Exception('unknown test "%s"' % test_name)
 
-        out = {
+        report = {
             'test_name': test_name,
-            'alternatives': test['a'],
-            'results': [
-                {'attempted': set(), 'completed': set()}
-                for alt in test['a']
-            ]
+            'results': []
         }
 
-        for data in find_lines(self.results_path, t=test_name):
-            result = out['results'][data['n']]
-            if data['a'] == a:
-                result['attempted'].add(data['i'])
-            elif data['a'] == b and data['i'] in result['attempted']:
-                result['completed'].add(data['i'])
+        trials = sparsearray(int)
+        maxstep = {}
 
-        for result in out['results']:
-            result['attempted'] = len(result['attempted'])
-            result['completed'] = len(result['completed'])
+        for result in find_lines(self.results_path, t=test_name):
+            step = test['s'].index(result['s'])
+            sofar = maxstep.get(result['i'])
+            if sofar is None and step == 0 or sofar is not None and step == sofar + 1:
+                trials[result['n']][step] += 1
+                maxstep[result['i']] = step
 
-        return out
+        for i, alternative in enumerate(test['a']):
+            funnel = []
+            alt = {'alternative': alternative, 'funnel': funnel}
+            report['results'].append(alt)
+            for s, stepspair in enumerate(pairwise(test['s'])):
+                att = trials[i][s]
+                con = trials[i][s + 1]
+                funnel.append({
+                    'stage': stepspair,
+                    'attempted': att,
+                    'converted': con,
+                })
+
+        return report
 
