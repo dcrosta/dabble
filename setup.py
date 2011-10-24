@@ -21,5 +21,7 @@ setup(
     url='https://github.com/dcrosta/dabble',
     keywords='python web abtest split ab a/b test',
     packages=find_packages(),
+    tests_require=['nose'],
+    test_suite='nose.collector',
 )
 
