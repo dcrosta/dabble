@@ -5,14 +5,12 @@ configure your tests in code, collect results, and analyze them later to
 make informed decisions about design changes, feature implementations, etc.
 
 You define an A/B test in dabble with class `ABTest`, which describes the
-test name and the names of each of the alternatives. You then define one or
-more `ABParameter`s, which contain the values you wish to vary for each
-alternative in the test. Each test can have one or more alternatives, though
-the most common case is to have 2 (hence "A/B testing").
-
-Dabble works best in web frameworks which use class-based views, though it
-is certainly possible to use dabble in a framework with function-based
-views.
+test name, the names of each of the alternatives, and the set of steps the
+users will progress through during the test (in the simplest case, this is
+just two steps). You then define one or more `ABParameter`s, which contain
+the values you wish to vary for each alternative in the test. Each test can
+have one or more alternatives, though the most common case is to have 2
+(hence "A/B testing").
 
 ## Example
 
@@ -25,7 +23,9 @@ views.
     class Signup(page):
         path = '/signup'
 
-        signup_button = ABTest('signup button', ['Red Button', 'Green Button'])
+        signup_button = ABTest('signup button',
+                               alternatives=['red', 'green'],
+                               steps=['show', 'signup'])
         button_color = ABParameter('signup button', ['#ff0000', '#00ff00'])
 
         def GET(self):
@@ -67,4 +67,40 @@ provides several backends, including `MongoResultsStorage`, and
 
 At this time it is not possible to configure different `IdentityProvider`s
 or `ResultsStorage`s for different tests within the same application.
+
+## Reporting
+
+Dabble will also produce reports on all users who have taken part in an A/B
+test, by way of the `report()` method. The report is a dictionary which
+describes, for each alternative, how many users attempted and converted at
+each of the defined steps. For the above example, a report might look like:
+
+
+    >>> storage = FSResultStorage('/path/to/results.data')
+    >>> storage.report('signup button')
+    {
+        'test_name': 'signup button',
+        'results': [
+            {
+                'alternative': 'red',
+                'funnel': [{
+                    'stage': ('show', 'signup'),
+                    'attempted': 187,
+                    'converted': 22,
+                }],
+            },
+            {
+                'alternative': 'green',
+                'funnel': [{
+                    'stage': ('show', 'signup'),
+                    'attempted': 195
+                    'converted': 18,
+                }],
+            }
+        ],
+    }
+
+The `funnel` key in each of the `results` entries will have one element
+fewer than the number of steps, since each entry describes the progression
+of users from one step to the next.
 
