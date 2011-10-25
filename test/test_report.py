@@ -268,7 +268,9 @@ def mongo_tearDown(self):
     generic_tearDown(self)
 
     conn = pymongo.Connection()
-    conn.drop_database('dabble_test')
+    db = conn.dabble_test
+    for collection in ('dabble.tests', 'dabble.results'):
+        db.drop_collection(collection)
 
 def fs_tearDown(self):
     generic_tearDown(self)
