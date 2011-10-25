@@ -28,6 +28,7 @@ __all__ = ('configure', 'IdentityProvider', 'ResultStorage', 'ABTest', 'ABParame
 __version__ = '0.2'
 
 from datetime import datetime
+from hashlib import sha1
 import random
 
 class IdentityProvider(object):
@@ -213,7 +214,7 @@ class AB(object):
 
     @property
     def identity(self):
-        return hash(self._id_provider.get_identity())
+        return sha1(unicode(self._id_provider.get_identity())).hexdigest()
 
     @property
     def alternative(self):
