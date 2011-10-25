@@ -3,3 +3,4 @@
 dabble.egg-info
 *.egg
 distribute*.tar.gz
+dist
