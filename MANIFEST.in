@@ -1,0 +1,6 @@
+recursive-include dabble *.py
+recursive-include test *.py
+include distribute_setup.py
+include setup.py
+include LICENSE
+include README.md
