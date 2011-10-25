@@ -133,3 +133,7 @@ class MongoResultStorage(ResultStorage):
 
         return report
 
+    def list_tests(self):
+        """Return a list of string test names known."""
+        return [t['_id'] for t in self.tests.find(fields=['_id'])]
+

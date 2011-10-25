@@ -208,11 +208,24 @@ def ReportTestFor(name, setUp_func, tearDown_func):
         report = self.storage.report('foobar')
         self.assertEquals(report, expected)
 
+    def test_list_tests(self):
+        class T(object):
+            first = ABTest('first', ['a', 'b'], ['a', 'b'])
+            second = ABTest('second', ['a', 'b'], ['a', 'b'])
+
+        T()
+
+        tests = self.storage.list_tests()
+        self.assertEquals(2, len(tests))
+        self.assertTrue('first' in tests, '"first" should be in tests')
+        self.assertTrue('second' in tests, '"second" should be in tests')
+
 
     funcs = {
         'test_one': test_one,
         'test_two': test_two,
         'test_funnel': test_funnel,
+        'test_list_tests': test_list_tests,
     }
     if setUp_func:
         funcs['setUp'] = setUp_func

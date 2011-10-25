@@ -163,3 +163,7 @@ class FSResultStorage(ResultStorage):
 
         return report
 
+    def list_tests(self):
+        """Return a list of string test names known."""
+        return [t['t'] for t in find_lines(self.tests_path)]
+

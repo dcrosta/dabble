@@ -177,6 +177,10 @@ class ResultStorage(object):
         """
         raise Exception('Not implemented. Use a sub-class of ResultStorage')
 
+    def list_tests(self):
+        """Return a list of string test names known."""
+        raise Exception('Not implemented. Use a sub-class of ResultStorage')
+
 
 def configure(identity_provider, result_storage):
     if not isinstance(identity_provider, IdentityProvider):
