@@ -2,6 +2,7 @@ from distribute_setup import use_setuptools
 use_setuptools()
 
 from setuptools import setup, find_packages
+from os.path import abspath, dirname, join
 
 from dabble import __version__
 
@@ -9,6 +10,7 @@ setup(
     name='dabble',
     version=__version__,
     description='Simple A/B testing framework',
+    long_description=file(abspath(join(dirname(__file__), 'README.md'))).read(),
     classifiers=[
         "Programming Language :: Python",
         "Programming Language :: Python :: 2.4",
