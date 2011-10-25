@@ -11,6 +11,7 @@ setup(
     version=__version__,
     description='Simple A/B testing framework',
     long_description=file(abspath(join(dirname(__file__), 'README.md'))).read(),
+    license='BSD',
     classifiers=[
         "Programming Language :: Python",
         "Programming Language :: Python :: 2.4",
@@ -18,7 +19,7 @@ setup(
         "Programming Language :: Python :: 2.6",
         "Programming Language :: Python :: 2.7",
     ],
-    author='Daniel Crosta',
+    author='Dan Crosta',
     author_email='dcrosta@late.am',
     url='https://github.com/dcrosta/dabble',
     keywords='python web abtest split ab a/b test',
