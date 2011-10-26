@@ -57,8 +57,7 @@ class MongoResultStorage(ResultStorage):
         self.tests = database['%s.tests' % namespace]
         self.results = database['%s.results' % namespace]
 
-        self.results.ensure_index('i')
-        self.results.ensure_index('t')
+        self.results.ensure_index([('t', ASCENDING), ('i', ASCENDING)])
 
     def save_test(self, test_name, alternatives, steps):
         test = self.tests.find_one({'_id': test_name})
