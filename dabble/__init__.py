@@ -25,7 +25,7 @@
 
 __all__ = ('configure', 'IdentityProvider', 'ResultStorage', 'ABTest', 'ABParameter')
 
-__version__ = '0.2.2'
+__version__ = '0.2.3'
 
 from datetime import datetime
 from hashlib import sha1
