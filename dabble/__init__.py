@@ -258,15 +258,6 @@ class ABTest(AB):
             action,
         )
 
-    def is_completed(self, action):
-        self._storage.has_action(
-            self.identity,
-            self.test_name,
-            self.alternative,
-            action
-        )
-
-
 class ABParameter(AB):
     # a descriptor object which can be used to vary parameters
     # in a class definition according to A/B testing rules.
@@ -278,5 +269,4 @@ class ABParameter(AB):
 
     def __get__(self, instance, owner):
         return self.alternatives[self.alternative]
-
 
